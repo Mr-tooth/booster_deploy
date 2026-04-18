@@ -359,6 +359,7 @@ class Policy:
         """Convert default ONNX first output to torch tensor."""
         if not outputs:
             raise RuntimeError("ONNX returned no outputs")
+        # For simplicity, we assume the first output is the action tensor. 
         output = outputs[0]
         if isinstance(output, torch.Tensor):
             tensor = output.detach()
