@@ -1,3 +1,5 @@
+"""Task and evaluator registries for deployment entrypoints."""
+
 from __future__ import annotations
 
 from typing import Dict
@@ -19,10 +21,25 @@ def register_task(name: str, cfg: ControllerCfg) -> None:
 
 
 def get_task(name: str) -> ControllerCfg:
+    """Return task configuration by registered name.
+
+    Args:
+        name: Task key used during registration.
+
+    Returns:
+        Registered controller configuration.
+
+    """
     return _TASK_REGISTRY[name]
 
 
 def list_tasks() -> Dict[str, ControllerCfg]:
+    """Return a copy of all registered tasks.
+
+    Returns:
+        Mapping from task name to task configuration.
+
+    """
     return dict(_TASK_REGISTRY)
 
 
@@ -37,10 +54,25 @@ def register_evaluator(name: str, cfg: EvaluatorCfg) -> None:
 
 
 def get_evaluator(name: str) -> EvaluatorCfg:
+    """Return evaluator configuration by registered name.
+
+    Args:
+        name: Evaluator key used during registration.
+
+    Returns:
+        Registered evaluator configuration.
+
+    """
     return _EVALUATOR_REGISTRY[name]
 
 
 def list_evaluators() -> Dict[str, EvaluatorCfg]:
+    """Return a copy of all registered evaluators.
+
+    Returns:
+        Mapping from evaluator name to evaluator configuration.
+
+    """
     return dict(_EVALUATOR_REGISTRY)
 
 

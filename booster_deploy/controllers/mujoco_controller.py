@@ -1,3 +1,5 @@
+"""MuJoCo-backed controller for simulation-time policy evaluation."""
+
 from __future__ import annotations
 
 import sys
@@ -12,7 +14,18 @@ from .base_controller import BaseController, ControllerCfg, VelocityCommand
 
 
 class MujocoController(BaseController):
-    def __init__(self, cfg: ControllerCfg):
+    """Run policy inference against a MuJoCo simulation backend."""
+
+    def __init__(self, cfg: ControllerCfg) -> None:
+        """Initialize MuJoCo model state and optional reference ghost rendering.
+
+        Args:
+            cfg: Controller configuration with robot and simulator settings.
+
+        Returns:
+            None.
+
+        """
         super().__init__(cfg)
 
         mjcf_path = self._expand_assets_placeholder(self.robot.cfg.mjcf_path)
@@ -48,14 +61,20 @@ class MujocoController(BaseController):
         # Reference qpos can be set explicitly by the policy.
         self._reference_qpos: np.ndarray | None = None
 
-    def start(self):
+    def start(self) -> None:
+        """Reset runtime state and clear optional reference pose.
+
+        Returns:
+            None.
+
+        """
         # Clear reference; policy.reset() may set a fresh one.
         self._reference_qpos = None
-        return super().start()
+        super().start()
 
     def render_reference_robot(
         self,
-        viewer,
+        viewer: object,
         # mj_data: mujoco.MjData,
         *,
         rgba: np.ndarray | None = None,
@@ -106,14 +125,19 @@ class MujocoController(BaseController):
         mujoco.mj_forward(self.mj_model, self._ghost_mj_data)
 
     def _expand_assets_placeholder(self, path: str) -> str:
-        """Replace {BOOSTER_ASSETS_DIR} placeholder in a path string.
-        """
+        """Replace ``{BOOSTER_ASSETS_DIR}`` placeholder in an asset path."""
         try:
             return path.replace("{BOOSTER_ASSETS_DIR}", str(BOOSTER_ASSETS_DIR))
         except Exception:
             return path
 
-    def update_vel_command(self):
+    def update_vel_command(self) -> None:
+        """Update command values from interactive terminal input.
+
+        Returns:
+            None.
+
+        """
         cmd: VelocityCommand = self.vel_command
         if select.select([sys.stdin], [], [], 0)[0]:
             try:
@@ -136,6 +160,12 @@ class MujocoController(BaseController):
                 )
 
     def update_state(self) -> None:
+        """Copy latest MuJoCo simulation state into ``self.robot.data``.
+
+        Returns:
+            None.
+
+        """
         dof_pos = self.mj_data.qpos.astype(np.float32)[7:]
         dof_vel = self.mj_data.qvel.astype(np.float32)[6:]
         dof_torque = self.mj_data.qfrc_actuator[6:].astype(np.float32)
@@ -161,6 +191,15 @@ class MujocoController(BaseController):
             base_ang_vel_b).to(self.robot.data.device)
 
     def log_states(self, dof_targets: np.ndarray) -> None:
+        """Append rollout state snapshots to NPZ logs when enabled.
+
+        Args:
+            dof_targets: Current joint targets produced by policy.
+
+        Returns:
+            None.
+
+        """
         if self.cfg.mujoco.log_states is not None:
             if not hasattr(self, '_states'):
                 self._states = {
@@ -195,7 +234,16 @@ class MujocoController(BaseController):
                 print(f'saved {self.cfg.mujoco.log_states}.npz '
                       f'at {self._step_count} steps')
 
-    def ctrl_step(self, dof_targets: torch.Tensor):
+    def ctrl_step(self, dof_targets: torch.Tensor) -> None:
+        """Run one low-level control rollout with MuJoCo decimation.
+
+        Args:
+            dof_targets: Desired joint targets for the current policy step.
+
+        Returns:
+            None.
+
+        """
         dof_targets = dof_targets.cpu().numpy()  # type: ignore
         self.log_states(dof_targets)
         if self.vel_command is not None:
@@ -222,7 +270,13 @@ class MujocoController(BaseController):
             dof_pos = self.mj_data.qpos.astype(np.float32)[7:]
             dof_vel = self.mj_data.qvel.astype(np.float32)[6:]
 
-    def run(self):
+    def run(self) -> None:
+        """Run interactive MuJoCo viewer loop until stop condition is met.
+
+        Returns:
+            None.
+
+        """
         with mujoco.viewer.launch_passive(
                 self.mj_model, self.mj_data) as viewer:
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import atexit
 from multiprocessing import shared_memory
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 import fcntl
 import os
 import tempfile
@@ -46,6 +46,16 @@ class SyncedArray:
         create: bool = True,
         owner_pid: int | None = None,
     ) -> None:
+        """Create or attach a synchronized shared-memory array.
+
+        Args:
+            name: Logical array name shared between processes.
+            shape: Array shape or scalar length for 1D arrays.
+            dtype: Numpy dtype string or object.
+            create: Whether to create (`True`) or attach (`False`).
+            owner_pid: Optional owner PID used to construct shared names.
+
+        """
         self.name = name
         if isinstance(shape, int):
             self.shape = (shape,)
@@ -141,7 +151,7 @@ class SyncedArray:
             except Exception:
                 pass
 
-    def modify_in_place(self, func):
+    def modify_in_place(self, func: Callable[[np.ndarray], None]) -> None:
         """Atomically modify a shared-memory view under an exclusive lock.
 
         `func` will receive a numpy view (not a copy) over the shared memory

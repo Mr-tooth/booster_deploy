@@ -1,7 +1,7 @@
+"""Beyond-mimic policy task integrating motion priors for K1 deployment."""
+
 from __future__ import annotations
 from dataclasses import MISSING
-import os
-import inspect
 import torch
 
 from booster_deploy.controllers.base_controller import BaseController, Policy
@@ -17,7 +17,19 @@ from booster_deploy.utils.motion_loader import MotionLoader
 
 
 class BeyondMimicPolicy(Policy):
-    def __init__(self, cfg: BeyondMimicPolicyCfg, controller: BaseController):
+    """Policy that tracks a reference motion clip with learned residual actions."""
+
+    def __init__(self, cfg: BeyondMimicPolicyCfg, controller: BaseController) -> None:
+        """Initialize model, motion loader, and runtime buffers.
+
+        Args:
+            cfg: Policy configuration including model and motion file paths.
+            controller: Controller runtime that owns this policy instance.
+
+        Returns:
+            None.
+
+        """
         super().__init__(cfg, controller)
         self.cfg = cfg
         self._model: torch.jit.ScriptModule = torch.jit.load(
@@ -46,6 +58,12 @@ class BeyondMimicPolicy(Policy):
             self.cfg.device)
 
     def reset(self) -> None:
+        """Reset tracking state for a fresh rollout.
+
+        Returns:
+            None.
+
+        """
         self.init_root_yaw_quat_w_inv = lab_math.quat_inv(
             lab_math.yaw_quat(self.robot.data.root_quat_w))
         self.anchor_index = self.motion.track_body_names.index(
@@ -56,7 +74,13 @@ class BeyondMimicPolicy(Policy):
             dtype=torch.float32, device=self.cfg.device)
         self.motion.to(self.cfg.device)
 
-    def _set_command(self):
+    def _set_command(self) -> None:
+        """Load current frame command tensors from motion clip.
+
+        Returns:
+            None.
+
+        """
         row_ids = min(self.current_frame, self.motion.time_step_total - 1)
 
         self.cmd_dof_pos = self.motion.joint_pos[row_ids]
@@ -68,7 +92,12 @@ class BeyondMimicPolicy(Policy):
             row_ids, self.anchor_index]
 
     def compute_observation(self) -> torch.Tensor:
-        """Computes observations"""
+        """Compute policy observation tensor for current frame.
+
+        Returns:
+            Batched observation tensor with shape ``(1, obs_dim)``.
+
+        """
         self._set_command()
 
         command = torch.cat([self.cmd_dof_pos, self.cmd_dof_vel], dim=0)
@@ -107,13 +136,12 @@ class BeyondMimicPolicy(Policy):
         return obs.reshape(1, -1)
 
     def inference(self) -> torch.Tensor:
-        """Called by the controller each step to obtain the action tensor.
+        """Compute one policy action tensor from latest robot state.
 
-        Reads `robot.data` and velocity commands from the controller,
-        runs the underlying model's inference, and returns an action
-        as a `torch.Tensor`.
+        Returns:
+            Joint target tensor in real-joint order.
+
         """
-
         with torch.no_grad():
             obs = self.compute_observation()
             action = self._model(obs).flatten()
@@ -158,6 +186,8 @@ class BeyondMimicPolicy(Policy):
 
 @configclass
 class BeyondMimicPolicyCfg(PolicyCfg):
+    """Configuration schema for beyond-mimic policy."""
+
     constructor = BeyondMimicPolicy
     checkpoint_path: str = MISSING
     motion_path: str = MISSING
@@ -167,6 +197,8 @@ class BeyondMimicPolicyCfg(PolicyCfg):
 
 @configclass
 class K1BeyondMimicControllerCfg(ControllerCfg):
+    """Controller configuration for K1 beyond-mimic deployments."""
+
     robot = K1_CFG.replace(     # type: ignore
         joint_stiffness=[
             4.0, 4.0,

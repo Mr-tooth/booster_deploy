@@ -1,3 +1,5 @@
+"""Task registrations for beyond-mimic deployment presets."""
+
 from booster_deploy.utils.registry import register_task
 from booster_deploy.utils.isaaclab.configclass import configclass
 from .beyond_mimic import K1BeyondMimicControllerCfg
@@ -5,7 +7,15 @@ from .beyond_mimic import K1BeyondMimicControllerCfg
 
 @configclass
 class K1MJ2ControllerCfg(K1BeyondMimicControllerCfg):
-    def __post_init__(self):
+    """Preset configuration for K1 MJ2 dance deployment."""
+
+    def __post_init__(self) -> None:
+        """Populate checkpoint, motion, and gain overrides for MJ2 motion.
+
+        Returns:
+            None.
+
+        """
         super().__post_init__()
         self.policy.motion_path = "motions/k1_mj2_seg1.npz"
         self.policy.checkpoint_path = "models/k1_mj_dance_002_2025-12-03_00-10-28.pt"
@@ -34,7 +44,15 @@ class K1MJ2ControllerCfg(K1BeyondMimicControllerCfg):
 
 @configclass
 class K1FightControllerCfg(K1BeyondMimicControllerCfg):
-    def __post_init__(self):
+    """Preset configuration for K1 fight deployment."""
+
+    def __post_init__(self) -> None:
+        """Populate checkpoint, motion, and gain overrides for fight motion.
+
+        Returns:
+            None.
+
+        """
         super().__post_init__()
         self.policy.motion_path = "motions/k1_fight_final_deploy.npz"
         self.policy.checkpoint_path = "models/k1_fight_001.pt"

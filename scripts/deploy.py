@@ -1,3 +1,5 @@
+"""Command-line entrypoint for listing and launching deployment tasks."""
+
 import argparse
 import sys
 
@@ -22,7 +24,13 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-def main():
+def main() -> None:
+    """Load task registry and launch selected deployment backend.
+
+    Returns:
+        None.
+
+    """
     # load task registry and dispatch
     import pkgutil
     import tasks as tasks_pkg
@@ -64,7 +72,7 @@ def main():
         try:
             from booster_robotics_sdk_python import ChannelFactory  # type: ignore
             ChannelFactory.Instance().Init(0, args.net)
-        except ImportError as e:
+        except ImportError:
             print(
                 "Error: booster_robotics_sdk_python is not installed.\n"
                 "Please install it to use real robot deployment.\n"
