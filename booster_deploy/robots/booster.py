@@ -275,7 +275,7 @@ T1_23DOF_CFG = RobotCfg(
     ],
     # {BOOSTER_ASSETS_DIR} will be replaced with
     # booster_assets.BOOSTER_ASSETS_DIR by MujocoController
-    mjcf_path="{BOOSTER_ASSETS_DIR}/robots/T1/T1_23dof.xml",
+    mjcf_path="{BOOSTER_ASSETS_DIR}/robots/T1/T1_23dof_crawl.xml",
     prepare_state=PrepareStateCfg(
         stiffness=[
             40., 40.,
@@ -299,6 +299,153 @@ T1_23DOF_CFG = RobotCfg(
             0.,
             -0.1, 0.0, 0.0, 0.2, -0.1, 0.0,
             -0.1, 0.0, 0.0, 0.2, -0.1, 0.0
+        ],
+    ),
+)
+
+
+
+T1_23DOF_CRAWL_CFG = RobotCfg(
+    name="Booster_T1_CRAWL_23DOF",
+    joint_names=[
+        "AAHead_yaw",
+        "Head_pitch",
+        "Left_Shoulder_Pitch",
+        "Left_Shoulder_Roll",
+        "Left_Elbow_Pitch",
+        "Left_Elbow_Yaw",
+        "Right_Shoulder_Pitch",
+        "Right_Shoulder_Roll",
+        "Right_Elbow_Pitch",
+        "Right_Elbow_Yaw",
+        "Waist",
+        "Left_Hip_Pitch",
+        "Left_Hip_Roll",
+        "Left_Hip_Yaw",
+        "Left_Knee_Pitch",
+        "Left_Ankle_Pitch",
+        "Left_Ankle_Roll",
+        "Right_Hip_Pitch",
+        "Right_Hip_Roll",
+        "Right_Hip_Yaw",
+        "Right_Knee_Pitch",
+        "Right_Ankle_Pitch",
+        "Right_Ankle_Roll",
+    ],
+    body_names=[
+        "Trunk",
+        "H1",
+        "H2",
+        "AL1",
+        "AL2",
+        "AL3",
+        "left_hand_link",
+        "AR1",
+        "AR2",
+        "AR3",
+        "right_hand_link",
+        "Waist",
+        "Hip_Pitch_Left",
+        "Hip_Roll_Left",
+        "Hip_Yaw_Left",
+        "Shank_Left",
+        "Ankle_Cross_Left",
+        "left_foot_link",
+        "Hip_Pitch_Right",
+        "Hip_Roll_Right",
+        "Hip_Yaw_Right",
+        "Shank_Right",
+        "Ankle_Cross_Right",
+        "right_foot_link",
+    ],
+
+    joint_stiffness=[
+        4.0, 4.0,
+        4.0, 4.0, 4.0, 4.0,
+        4.0, 4.0, 4.0, 4.0,
+        80.,
+        80., 80.0, 80., 80., 30., 30.,
+        80., 80.0, 80., 80., 30., 30.,
+    ],
+    joint_damping=[
+        1., 1.,
+        1., 1., 1., 1.,
+        1., 1., 1., 1.,
+        2.,
+        2., 2., 2., 2., 2., 2.,
+        2., 2., 2., 2., 2., 2.,
+    ],
+    default_joint_pos=[
+        0, 0,
+        0.0, -1.4, 0, -0.,
+        0.0, 1.4, 0, 0.,
+        0.,
+        -0.0, 0, 0, 0.0, -0.0, 0.,
+        -0.0, 0, 0, 0.0, -0.0, 0.
+    ],
+    effort_limit=[
+        7, 7,
+        18, 18, 18, 18,
+        18, 18, 18, 18,
+        25.,
+        45, 25, 25, 60, 24, 15,
+        45, 25, 25, 60, 24, 15,
+    ],
+    sim_joint_names=[       # joint order in isaacsim/isaaclab
+        "AAHead_yaw",
+        'Left_Shoulder_Pitch',
+        'Right_Shoulder_Pitch',
+        'Waist',
+        "Head_pitch",
+        'Left_Shoulder_Roll',
+        'Right_Shoulder_Roll',
+        'Left_Hip_Pitch',
+        'Right_Hip_Pitch',
+        'Left_Elbow_Pitch',
+        'Right_Elbow_Pitch',
+        'Left_Hip_Roll',
+        'Right_Hip_Roll',
+        'Left_Elbow_Yaw',
+        'Right_Elbow_Yaw',
+        'Left_Hip_Yaw',
+        'Right_Hip_Yaw',
+        'Left_Knee_Pitch',
+        'Right_Knee_Pitch',
+        'Left_Ankle_Pitch',
+        'Right_Ankle_Pitch',
+        'Left_Ankle_Roll',
+        'Right_Ankle_Roll'
+    ],
+
+    sim_body_names=[    # body order in isaacsim/isaaclab
+
+    ],
+    # {BOOSTER_ASSETS_DIR} will be replaced with
+    # booster_assets.BOOSTER_ASSETS_DIR by MujocoController
+    mjcf_path="{BOOSTER_ASSETS_DIR}/robots/T1/T1_23dof_crawl.xml",
+    prepare_state=PrepareStateCfg(
+        stiffness=[
+            40., 40.,
+            40., 50., 20., 20,
+            40., 50., 20., 20,
+            350.,
+            350., 350., 180., 350., 350., 350.,
+            350., 350., 180., 350., 350., 350.,],
+        damping=[
+            0.65, 0.65,
+            0.5, 1.5, 0.2, 0.2,
+            0.5, 1.5, 0.2, 0.2,
+            5.,
+            7.5, 7.5, 3., 5.5, 5.0, 5.0,
+            7.5, 7.5, 3., 5.5, 5.0, 5.0,
+        ],
+        joint_pos=[
+            0, 0,
+            -1.9, -1.2, 0, -1.7,
+            -1.9, 1.2, 0, 1.7,
+            0.,
+            -0.87, 0.0, 0.0, 1.74, 0.0, 0.0,
+            -0.87, 0.0, 0.0, 1.74, 0.0, 0.0
         ],
     ),
 )

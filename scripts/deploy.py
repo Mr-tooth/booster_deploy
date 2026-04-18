@@ -64,7 +64,7 @@ def main():
         try:
             from booster_robotics_sdk_python import ChannelFactory  # type: ignore
             ChannelFactory.Instance().Init(0, args.net)
-        except ImportError as e:
+        except ImportError:
             print(
                 "Error: booster_robotics_sdk_python is not installed.\n"
                 "Please install it to use real robot deployment.\n"

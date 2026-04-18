@@ -36,10 +36,26 @@ Booster Deploy is a lightweight deployment framework that supports running contr
    pip install -r requirements.txt
    ```
 
+- Optional development tooling:
+   ```bash
+   python -m pip install ruff
+   ```
+
 - Launch the task in mujoco:
    ```bash
    python scripts/deploy.py --task <TASK_NAME> --mujoco
    ```
+
+### Development Quality Gates
+
+From repository root:
+
+```bash
+make ruff
+make lint
+make test
+make check
+```
 
 ### Run Sim2Real (Real Robots)
 

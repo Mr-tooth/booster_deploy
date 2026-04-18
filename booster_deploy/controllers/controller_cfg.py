@@ -73,6 +73,9 @@ class PolicyCfg:
     checkpoint_path: str = MISSING
     enable_safety_fallback: bool = True
     device: str | torch.device = "cpu"
+    stat_log_path: Optional[str] = None
+    stat_log_inference_io: bool = False
+    onnx_providers: List[str] = ["CPUExecutionProvider"]
 
 
 @configclass
