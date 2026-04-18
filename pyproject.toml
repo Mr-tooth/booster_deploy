@@ -5,16 +5,24 @@ exclude = [
   ".git",
   ".venv",
   "__pycache__",
+  "booster_deploy/utils/isaaclab",
 ]
 
 [tool.ruff.lint]
 select = [
   "E",
   "F",
+  "D",
+  "ANN",
 ]
 ignore = [
   "E501",
+  "D203",
+  "D213",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "double"
@@ -23,3 +31,4 @@ indent-style = "space"
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "-ra"

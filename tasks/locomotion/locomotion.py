@@ -1,3 +1,5 @@
+"""Locomotion policy task definitions for K1 and T1 robots."""
+
 from __future__ import annotations
 from dataclasses import MISSING
 import os
@@ -15,7 +17,17 @@ from booster_deploy.utils.isaaclab import math as lab_math
 class LocomotionPolicy(Policy):
     """walking policy with observation history."""
 
-    def __init__(self, cfg: LocomotionPolicyCfg, controller: BaseController):
+    def __init__(self, cfg: LocomotionPolicyCfg, controller: BaseController) -> None:
+        """Initialize locomotion policy model and history buffers.
+
+        Args:
+            cfg: Locomotion policy configuration.
+            controller: Controller runtime providing robot state and commands.
+
+        Returns:
+            None.
+
+        """
         super().__init__(cfg, controller)
         self.cfg = cfg
         self.robot = controller.robot
@@ -136,6 +148,8 @@ class LocomotionPolicy(Policy):
 
 @configclass
 class LocomotionPolicyCfg(PolicyCfg):
+    """Configuration schema for locomotion policy."""
+
     constructor = LocomotionPolicy
     checkpoint_path: str = MISSING  # type: ignore
     actor_obs_history_length: int = 10
@@ -146,6 +160,8 @@ class LocomotionPolicyCfg(PolicyCfg):
 
 @configclass
 class K1WalkControllerCfg(ControllerCfg):
+    """Controller configuration for K1 walking deployment."""
+
     robot = K1_CFG.replace(  # type: ignore
         default_joint_pos=[
             0, 0,
@@ -203,6 +219,8 @@ class K1WalkControllerCfg(ControllerCfg):
 
 @configclass
 class T1WalkControllerCfg(ControllerCfg):
+    """Controller configuration for T1 walking deployment."""
+
     robot = T1_23DOF_CFG.replace(  # type: ignore
         default_joint_pos=[
             0, 0,

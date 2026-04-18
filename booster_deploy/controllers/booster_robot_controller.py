@@ -1,3 +1,5 @@
+"""Real-robot controller runtime, process orchestration, and ROS IO bridges."""
+
 from __future__ import annotations
 import logging
 import signal
@@ -33,18 +35,42 @@ logging.basicConfig(
 
 
 class CountTimer:
-    def __init__(self, dt: float = 0.002, use_sim_time: bool = False):
+    """Expose simulation-time and wall-time clocks with a unified API."""
+
+    def __init__(self, dt: float = 0.002, use_sim_time: bool = False) -> None:
+        """Initialize timer mode and state.
+
+        Args:
+            dt: Simulation tick period in seconds.
+            use_sim_time: Whether to derive time from simulation ticks.
+
+        Returns:
+            None.
+
+        """
         self.dt = dt
         # Use multiprocessing.Value for inter-process communication
         self.counter = mp.Value('L', 0)
         self.use_sim_time = use_sim_time
 
-    def tick_timer_if_sim(self):
+    def tick_timer_if_sim(self) -> None:
+        """Advance the simulation-time counter by one step when enabled.
+
+        Returns:
+            None.
+
+        """
         if self.use_sim_time:
             with self.counter.get_lock():
                 self.counter.value += 1
 
-    def get_time(self):
+    def get_time(self) -> float:
+        """Return current time according to configured timer mode.
+
+        Returns:
+            Monotonic time in seconds.
+
+        """
         if self.use_sim_time:
             with self.counter.get_lock():
                 return self.counter.value * self.dt
@@ -53,12 +79,24 @@ class CountTimer:
 
 
 class BoosterRobotPortal:
+    """Manage ROS communication and process lifecycle for robot deployment."""
+
     synced_state: SyncedArray
     synced_command: SyncedArray
     synced_action: SyncedArray
     exit_event: synchronize.Event
 
     def __init__(self, cfg: ControllerCfg, use_sim_time: bool = False) -> None:
+        """Initialize shared buffers, communication and process state.
+
+        Args:
+            cfg: Controller configuration for robot and runtime services.
+            use_sim_time: Whether to use simulated time source.
+
+        Returns:
+            None.
+
+        """
         self.cfg = cfg
 
         self.robot = BoosterRobot(cfg.robot)
@@ -73,7 +111,8 @@ class BoosterRobotPortal:
         self.timer = CountTimer(
             self.cfg.booster.low_state_dt, use_sim_time=use_sim_time)
 
-        def signal_handler(sig, frame):
+        def signal_handler(sig: int, frame: object | None) -> None:
+            del sig, frame
             if mp.current_process().name == "MainProcess":
                 print("\nKeyboard interrupt received. Shutting down...")
             self.exit_event.set()
@@ -95,7 +134,13 @@ class BoosterRobotPortal:
         # reference `is_running` and `exit_event`, so ensure those are set.
         self._init_communication()
 
-    def _init_synced_buffer(self):
+    def _init_synced_buffer(self) -> None:
+        """Allocate cross-process synchronized state/action/command buffers.
+
+        Returns:
+            None.
+
+        """
         action_dtype = np.dtype(
             [
                 ("dof_target", float, (self.robot.num_joints,)),
@@ -141,7 +186,13 @@ class BoosterRobotPortal:
             dtype=command_dtype,
         )
 
-    def _init_metrics(self):
+    def _init_metrics(self) -> None:
+        """Create cross-process metric collectors.
+
+        Returns:
+            None.
+
+        """
         # initialize cross-process synced metrics
         max_events = self.cfg.booster.metrics_max_events
         self.metrics = {
@@ -170,7 +221,7 @@ class BoosterRobotPortal:
         SingleThreadedExecutor for the `/low_state` topic.
         """
 
-        def low_state_service_executor():
+        def low_state_service_executor() -> None:
             self.logger.info("Low state subscription started")
             low_state_node = rclpy.create_node("booster_deploy_low_state_sub")
             low_state_node.create_subscription(
@@ -218,7 +269,16 @@ class BoosterRobotPortal:
         )
         self.low_state_thread.start()
 
-    def _low_state_handler(self, low_state_msg: LowState):
+    def _low_state_handler(self, low_state_msg: LowState) -> None:
+        """Handle incoming low-state ROS messages and refresh shared buffers.
+
+        Args:
+            low_state_msg: Incoming low-level robot state message.
+
+        Returns:
+            None.
+
+        """
         self.metrics["low_state_handler"].mark()
         try:
             if not self.is_running or self.exit_event.is_set():
@@ -264,7 +324,19 @@ class BoosterRobotPortal:
             self.running = False
             self.exit_event.set()
 
-    def create_low_cmd_publisher(self, name):
+    def create_low_cmd_publisher(
+        self,
+        name: str,
+    ) -> rclpy.publisher.Publisher:
+        """Create a ROS publisher and initialize outbound low command message.
+
+        Args:
+            name: ROS node name for the publisher process.
+
+        Returns:
+            ROS publisher for ``joint_ctrl`` commands.
+
+        """
         self.publish_node = rclpy.create_node(name)
         publisher = self.publish_node.create_publisher(
             LowCmd,
@@ -295,7 +367,13 @@ class BoosterRobotPortal:
 
         return publisher
 
-    def start_custom_mode_conditionally(self):
+    def start_custom_mode_conditionally(self) -> bool:
+        """Wait for user trigger, then switch robot into custom mode.
+
+        Returns:
+            ``True`` if custom mode is started, otherwise ``False``.
+
+        """
         print(f"{self.remoteControlService.get_custom_mode_operation_hint()}")
         while not self.exit_event.is_set():
             if self.remoteControlService.start_custom_mode():
@@ -343,7 +421,7 @@ class BoosterRobotPortal:
         self.logger.info("Custom mode started, initialized with prepare pose")
         return True
 
-    def start_rl_gait_conditionally(self):
+    def start_rl_gait_conditionally(self) -> bool:
         """Start RL gait and spawn inference process and publisher thread."""
         print(f"{self.remoteControlService.get_rl_gait_operation_hint()}")
         while not self.exit_event.is_set():
@@ -432,9 +510,13 @@ class BoosterRobotPortal:
                 f"min={stats['min_period_s']}, max={stats['max_period_s']}"
             )
 
-    def run(self):
-        """Main loop: monitor inference process and diagnostics (10Hz)."""
+    def run(self) -> None:
+        """Run portal lifecycle and monitor child process health.
 
+        Returns:
+            None.
+
+        """
         print("Initialization complete.")
 
         # start custom mode (interruptible)
@@ -461,9 +543,11 @@ class BoosterRobotPortal:
         self.client.ChangeMode(RobotMode.kWalking)
 
     def __enter__(self) -> BoosterRobotPortal:
+        """Enter context manager and return portal handle."""
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(self, *args: object) -> None:
+        """Exit context manager and perform resource cleanup."""
         self.cleanup()
 
     @staticmethod
@@ -471,19 +555,44 @@ class BoosterRobotPortal:
         cfg: ControllerCfg,
         portal: BoosterRobotPortal,
     ) -> None:
+        """Run inference controller process entrypoint.
+
+        Args:
+            cfg: Controller configuration for child process.
+            portal: Shared portal object for cross-process IO.
+
+        Returns:
+            None.
+
+        """
         BoosterRobotController(cfg, portal).run()
         portal.logger.info("Inference process stopped.")
 
 
 class BoosterRobotController(BaseController):
-    '''Controller for Booster robots. Note that this controller runs in a
-    separate process forked by BoosterRobotPortal.
-    '''
+    """Run policy inference and publish low-level motor commands on robot."""
+
     def __init__(self, cfg: ControllerCfg, portal: BoosterRobotPortal) -> None:
+        """Initialize child-process controller bound to shared portal.
+
+        Args:
+            cfg: Controller configuration.
+            portal: Shared-process communication portal.
+
+        Returns:
+            None.
+
+        """
         super().__init__(cfg)
         self.portal = portal
 
-    def update_vel_command(self):
+    def update_vel_command(self) -> None:
+        """Update normalized velocity command from shared command buffer.
+
+        Returns:
+            None.
+
+        """
         cmd = self.portal.synced_command.read()[0]
 
         self.vel_command.lin_vel_x = cmd["vx"] * self.vel_command.vx_max
@@ -491,6 +600,12 @@ class BoosterRobotController(BaseController):
         self.vel_command.ang_vel_yaw = cmd["vyaw"] * self.vel_command.vyaw_max
 
     def update_state(self) -> None:
+        """Update robot state tensors from shared state buffer.
+
+        Returns:
+            None.
+
+        """
         state = self.portal.synced_state.read()[0]
 
         self.robot.data.joint_pos = torch.from_numpy(
@@ -521,6 +636,15 @@ class BoosterRobotController(BaseController):
                 self.robot.data.device)
 
     def ctrl_step(self, dof_targets: torch.Tensor) -> None:
+        """Publish one low-level command computed from policy targets.
+
+        Args:
+            dof_targets: Desired joint position targets.
+
+        Returns:
+            None.
+
+        """
         for i in range(self.robot.num_joints):
             self.portal.motor_cmd[i].q = float(dof_targets[i].item())
             kp_val = float(self.robot.joint_stiffness[i].item())
@@ -529,11 +653,23 @@ class BoosterRobotController(BaseController):
             self.portal.motor_cmd[i].kd = kd_val
         self.portal.low_cmd_publisher.publish(self.portal.low_cmd)
 
-    def stop(self):
+    def stop(self) -> None:
+        """Stop controller execution and notify portal exit event.
+
+        Returns:
+            None.
+
+        """
         super().stop()
         self.portal.exit_event.set()
 
-    def run(self):
+    def run(self) -> None:
+        """Run controller loop at policy rate until stop/exit is signaled.
+
+        Returns:
+            None.
+
+        """
         self.update_state()
         if self.vel_command is not None:
             self.update_vel_command()

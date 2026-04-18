@@ -1,24 +1,49 @@
+"""Base controller abstractions and shared policy runtime helpers."""
+
 from __future__ import annotations
 from abc import abstractmethod
 import csv
 import inspect
 import os
 from pathlib import Path
-from typing import Any
-from typing import cast
-import torch
+from typing import Protocol, cast
 import numpy as np
+import torch
 
 from .controller_cfg import (
     ControllerCfg, PolicyCfg, RobotCfg, VelocityCommandCfg
 )
 
+StatSequence = list[float] | tuple[float, ...]
+StatValue = torch.Tensor | np.ndarray | StatSequence | float | int
+CsvCell = str | int | float | None
+
+
+class OnnxIoInfo(Protocol):
+    """Protocol for ONNX input/output metadata."""
+
+    name: str
+
+
+class OnnxSessionLike(Protocol):
+    """Protocol for ONNX Runtime session methods used by this framework."""
+
+    def get_inputs(self) -> list[OnnxIoInfo]:
+        """Return declared ONNX input metadata."""
+
+    def get_outputs(self) -> list[OnnxIoInfo]:
+        """Return declared ONNX output metadata."""
+
+    def run(
+        self,
+        output_names: list[str],
+        input_feed: dict[str, np.ndarray],
+    ) -> list[np.ndarray]:
+        """Execute ONNX inference for the given input feed."""
+
 
 class RobotData:
-    """
-    The joint indexing follows the real robot,
-    described in RobotCfg.joint_names
-    """
+    """Store normalized runtime robot state tensors in real-joint order."""
 
     joint_pos: torch.Tensor
     joint_vel: torch.Tensor
@@ -40,6 +65,7 @@ class RobotData:
             - ``real2sim_joint_indexes`` and ``sim2real_joint_indexes`` are
               computed once and reused to convert ordering between deployment
               interfaces and simulation-trained policies.
+
         """
         self.cfg = cfg
         num_joints = len(self.cfg.joint_names)
@@ -60,6 +86,7 @@ class RobotData:
 
         Args:
             device: Target torch device (e.g. ``"cpu"`` or ``"cuda:0"``).
+
         """
         self.device = device
         self.joint_pos = self.joint_pos.to(device)
@@ -72,6 +99,8 @@ class RobotData:
 
 
 class BoosterRobot:
+    """Bundle static robot configuration and mutable runtime state."""
+
     cfg: RobotCfg
     data: RobotData
     joint_stiffness: torch.Tensor
@@ -79,6 +108,15 @@ class BoosterRobot:
     default_joint_pos: torch.Tensor
 
     def __init__(self, cfg: RobotCfg) -> None:
+        """Build a robot runtime wrapper from static configuration.
+
+        Args:
+            cfg: Robot configuration with joint ordering and default gains.
+
+        Returns:
+            None.
+
+        """
         self.cfg = cfg
         self.data = RobotData(cfg)
 
@@ -91,18 +129,24 @@ class BoosterRobot:
 
     @property
     def num_joints(self) -> int:
+        """Return the number of robot joints."""
         return len(self.cfg.joint_names)
 
     @property
     def num_bodies(self) -> int:
+        """Return the number of robot rigid bodies."""
         return len(self.cfg.body_names)
 
 
 class Commands:
+    """Marker base class for controller command objects."""
+
     pass
 
 
 class VelocityCommand(Commands):
+    """Store normalized velocity command values for policy observations."""
+
     lin_vel_x: float
     lin_vel_y: float
     ang_vel_yaw: float
@@ -112,6 +156,7 @@ class VelocityCommand(Commands):
 
         Args:
             cfg: Velocity command bounds used to scale user command input.
+
         """
         self.vx_max = cfg.vx_max
         self.vy_max = cfg.vy_max
@@ -123,7 +168,9 @@ class VelocityCommand(Commands):
 
 
 class Policy:
-    def __init__(self, cfg: PolicyCfg, controller: BaseController):
+    """Base policy API with reusable model-runtime and logging utilities."""
+
+    def __init__(self, cfg: PolicyCfg, controller: BaseController) -> None:
         """Create a policy bound to a controller runtime.
 
         Args:
@@ -133,6 +180,7 @@ class Policy:
         Notes:
             ``task_path`` is inferred from concrete subclass module location,
             which enables task-relative asset loading in derived policies.
+
         """
         self.cfg = cfg
         self.controller = controller
@@ -147,21 +195,24 @@ class Policy:
 
         self._backend: str | None = None
         self._model: torch.jit.ScriptModule | None = None
-        self._onnx_session: Any = None
+        self._onnx_session: OnnxSessionLike | None = None
         self._onnx_input_names: list[str] = []
         self._onnx_output_names: list[str] = []
+        self._onnx_obs_input_name: str | None = None
+        self._onnx_action_output_name: str | None = None
         self._runtime_checkpoint_path: str | None = None
 
     @abstractmethod
     def reset(self) -> None:
-        """Called when the controller starts."""
+        """Reset policy state before entering the control loop."""
 
     @abstractmethod
     def inference(self) -> torch.Tensor:
-        """Called each controller step to perform inference.
+        """Run one policy inference step.
 
         Returns:
-            action torch.Tensor containing the action for this step.
+            Action tensor for the current controller step.
+
         """
 
     def resolve_checkpoint_path(self, checkpoint_path: str) -> str:
@@ -180,7 +231,16 @@ class Policy:
         return task_relative
 
     def initialize_model_runtime(self, checkpoint_path: str | None = None) -> None:
-        """Initialize model runtime from checkpoint path (.pt/.onnx)."""
+        """Initialize runtime backend from checkpoint path.
+
+        Args:
+            checkpoint_path: Optional checkpoint path override. If omitted,
+                uses ``self.cfg.checkpoint_path``.
+
+        Returns:
+            None.
+
+        """
         raw_path = checkpoint_path or self.cfg.checkpoint_path
         resolved_path = self.resolve_checkpoint_path(raw_path)
         self._runtime_checkpoint_path = resolved_path
@@ -195,17 +255,20 @@ class Policy:
                 ) from exc
 
             providers = list(getattr(self.cfg, "onnx_providers", ["CPUExecutionProvider"]))
-            self._onnx_session = ort.InferenceSession(
+            session = ort.InferenceSession(
                 resolved_path, providers=providers
             )
+            self._onnx_session = cast(OnnxSessionLike, session)
             self._onnx_input_names = [
                 item.name for item in self._onnx_session.get_inputs()
             ]
             self._onnx_output_names = [
                 item.name for item in self._onnx_session.get_outputs()
             ]
-            self._model = None
             self._backend = "onnx"
+            self._resolve_onnx_input_names()
+            self._resolve_onnx_output_names()
+            self._model = None
             return
 
         model = torch.jit.load(resolved_path, map_location=self.cfg.device)
@@ -218,7 +281,43 @@ class Policy:
         self._onnx_session = None
         self._onnx_input_names = []
         self._onnx_output_names = []
+        self._onnx_obs_input_name = None
+        self._onnx_action_output_name = None
         self._backend = "torch"
+
+    def _resolve_onnx_input_names(self) -> None:
+        """Resolve standard single-input ONNX input names.
+
+        Returns:
+            None.
+
+        Raises:
+            RuntimeError: If ONNX model does not expose exactly one input.
+
+        """
+        if self._backend != "onnx":
+            return
+        if len(self._onnx_input_names) != 1:
+            raise RuntimeError(
+                "Default policy ONNX model must expose exactly one input."
+            )
+        self._onnx_obs_input_name = self._onnx_input_names[0]
+
+    def _resolve_onnx_output_names(self) -> None:
+        """Resolve standard single-output ONNX output names.
+
+        Returns:
+            None.
+
+        Raises:
+            RuntimeError: If ONNX model does not expose at least one output.
+
+        """
+        if self._backend != "onnx":
+            return
+        if not self._onnx_output_names:
+            raise RuntimeError("ONNX model has no outputs.")
+        self._onnx_action_output_name = self._onnx_output_names[0]
 
     def infer_model(self, obs: torch.Tensor) -> torch.Tensor:
         """Run backend inference using initialized runtime state."""
@@ -238,7 +337,7 @@ class Policy:
 
         raise RuntimeError("Model runtime is not initialized")
 
-    def prepare_onnx_inputs(self, obs: torch.Tensor) -> dict[str, Any]:
+    def prepare_onnx_inputs(self, obs: torch.Tensor) -> dict[str, np.ndarray]:
         """Build default ONNX input map for single-input models."""
         if not self._onnx_input_names:
             raise RuntimeError("ONNX inputs are not initialized")
@@ -246,12 +345,17 @@ class Policy:
             raise RuntimeError(
                 "Default prepare_onnx_inputs supports single-input ONNX models only"
             )
+        if self._onnx_obs_input_name is None:
+            raise RuntimeError("ONNX input name is not resolved.")
         obs_np = obs.detach().cpu().numpy().astype(np.float32)
         if obs_np.ndim == 1:
             obs_np = obs_np.reshape(1, -1)
-        return {self._onnx_input_names[0]: obs_np}
+        return {self._onnx_obs_input_name: obs_np}
 
-    def parse_onnx_outputs(self, outputs: list[Any]) -> torch.Tensor:
+    def parse_onnx_outputs(
+        self,
+        outputs: list[np.ndarray | torch.Tensor],
+    ) -> torch.Tensor:
         """Convert default ONNX first output to torch tensor."""
         if not outputs:
             raise RuntimeError("ONNX returned no outputs")
@@ -262,17 +366,34 @@ class Policy:
             tensor = torch.as_tensor(output)
         return tensor.to(device=self.cfg.device, dtype=torch.float32)
 
-    def log_named_vector(self, name: str, value: Any) -> None:
-        """Log one named runtime value as summary statistics."""
+    def log_named_vector(self, name: str, value: StatValue) -> None:
+        """Log one named runtime value as summary statistics.
+
+        Args:
+            name: Logical metric key.
+            value: Runtime value to summarize and store.
+
+        Returns:
+            None.
+
+        """
         self.log_stats({name: value})
 
-    def log_stats(self, stats: dict[str, Any]) -> None:
-        """Append summary stats to CSV at ``PolicyCfg.stat_log_path``."""
+    def log_stats(self, stats: dict[str, StatValue]) -> None:
+        """Append summary stats to CSV at ``PolicyCfg.stat_log_path``.
+
+        Args:
+            stats: Mapping from metric name to runtime value.
+
+        Returns:
+            None.
+
+        """
         log_path = getattr(self.cfg, "stat_log_path", None)
         if not log_path:
             return
 
-        rows: list[dict[str, Any]] = []
+        rows: list[dict[str, CsvCell]] = []
         step = int(getattr(self.controller, "_step_count", -1))
         time_s = self.controller.get_time() if hasattr(self.controller, "get_time") else 0.0
 
@@ -295,8 +416,18 @@ class Policy:
         self._append_stat_rows(log_path, rows)
 
     def _summarize_stat_value(
-        self, value: Any
+        self,
+        value: StatValue,
     ) -> tuple[str, str, float | None, float | None, float | None, float | None]:
+        """Convert a runtime value into scalar summary statistics.
+
+        Args:
+            value: Input metric value in tensor/array/scalar form.
+
+        Returns:
+            Tuple of value kind, shape and min/max/mean/std summaries.
+
+        """
         if isinstance(value, torch.Tensor):
             array = value.detach().cpu().numpy()
             kind = "tensor"
@@ -325,7 +456,21 @@ class Policy:
             float(array.std()),
         )
 
-    def _append_stat_rows(self, log_path: str, rows: list[dict[str, Any]]) -> None:
+    def _append_stat_rows(
+        self,
+        log_path: str,
+        rows: list[dict[str, CsvCell]],
+    ) -> None:
+        """Append precomputed metric rows to CSV.
+
+        Args:
+            log_path: Output CSV path.
+            rows: Fully materialized table rows.
+
+        Returns:
+            None.
+
+        """
         if not rows:
             return
         path = Path(log_path)
@@ -418,6 +563,7 @@ class BaseController:
         Notes:
             This constructor initializes robot model wrappers, optional velocity
             command interfaces, and policy instance via configured constructor.
+
         """
         self.cfg = cfg
         self._step_count: int = 0
@@ -436,7 +582,7 @@ class BaseController:
         """Get elapsed time since start of current session in seconds."""
         return self._elapsed_s
 
-    def start(self):
+    def start(self) -> None:
         """Begin a deployment session.
 
         This method resets runtime counters and invokes ``policy.reset()``.
@@ -452,6 +598,7 @@ class BaseController:
 
         Returns:
             action tensor
+
         """
         if not self.is_running:
             raise RuntimeError("Environment.step() called before start().")
@@ -475,6 +622,7 @@ class BaseController:
 
         Args:
             dof_targets: Action tensor for this step (dof targets).
+
         """
 
     @abstractmethod
@@ -483,4 +631,4 @@ class BaseController:
 
     @abstractmethod
     def run(self) -> None:
-        """Main loop entry point."""
+        """Run the controller main loop."""

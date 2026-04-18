@@ -23,6 +23,6 @@ compile:
 	$(PYTHON) -m compileall -q booster_deploy tasks scripts tests
 
 test:
-	PYTHONPATH=. $(PYTHON) -m unittest discover -s tests/controllers -p "test_*.py" -v
+	PYTHONPATH=. $(PYTHON) -m pytest -q
 
 check: lint test

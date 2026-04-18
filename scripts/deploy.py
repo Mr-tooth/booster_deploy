@@ -1,3 +1,5 @@
+"""Command-line entrypoint for listing and launching deployment tasks."""
+
 import argparse
 import sys
 
@@ -22,7 +24,13 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-def main():
+def main() -> None:
+    """Load task registry and launch selected deployment backend.
+
+    Returns:
+        None.
+
+    """
     # load task registry and dispatch
     import pkgutil
     import tasks as tasks_pkg

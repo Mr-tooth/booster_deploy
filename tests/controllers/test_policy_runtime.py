@@ -1,3 +1,5 @@
+"""Regression tests for recovered Policy runtime and logging behavior."""
+
 from __future__ import annotations
 
 import tempfile
@@ -64,7 +66,10 @@ def _save_onnx_model(path: Path) -> None:
 
 
 class TestPolicyRuntime(unittest.TestCase):
+    """Validate base policy runtime behavior across PT and ONNX backends."""
+
     def test_initialize_model_runtime_supports_torchscript(self) -> None:
+        """Verify TorchScript checkpoints initialize torch backend runtime."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             ckpt_path = Path(tmp_dir) / "model.pt"
             _save_torchscript_model(ckpt_path)
@@ -76,6 +81,7 @@ class TestPolicyRuntime(unittest.TestCase):
             self.assertIsNotNone(policy._model)
 
     def test_initialize_model_runtime_supports_onnx(self) -> None:
+        """Verify ONNX checkpoints initialize ONNX runtime and IO names."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             ckpt_path = Path(tmp_dir) / "model.onnx"
             _save_onnx_model(ckpt_path)
@@ -89,6 +95,7 @@ class TestPolicyRuntime(unittest.TestCase):
             self.assertEqual(policy._onnx_output_names, ["action"])
 
     def test_prepare_onnx_inputs_adds_batch_dimension(self) -> None:
+        """Verify ONNX input preparation adds batch dimension for 1D obs."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             ckpt_path = Path(tmp_dir) / "model.onnx"
             _save_onnx_model(ckpt_path)
@@ -102,6 +109,7 @@ class TestPolicyRuntime(unittest.TestCase):
             self.assertEqual(feed["obs"].dtype, np.float32)
 
     def test_parse_onnx_outputs_returns_tensor(self) -> None:
+        """Verify ONNX outputs are converted to float tensors on policy device."""
         policy = _TestPolicy(_make_cfg(), _DummyController())
         parsed = policy.parse_onnx_outputs([np.array([[1.0, 2.0]], dtype=np.float32)])
 
@@ -110,6 +118,7 @@ class TestPolicyRuntime(unittest.TestCase):
         self.assertEqual(parsed.dtype, torch.float32)
 
     def test_log_helpers_write_csv(self) -> None:
+        """Verify runtime stat logging writes CSV rows with expected keys."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             stats_path = Path(tmp_dir) / "logs" / "stats.csv"
             controller = _DummyController()

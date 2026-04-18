@@ -12,3 +12,6 @@ __pycache__/
 
 
 loco_crawl_train/
+
+# Internal planning artifacts (do not publish)
+docs/superpowers/

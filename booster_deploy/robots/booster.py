@@ -1,3 +1,5 @@
+"""Robot configuration presets for Booster platform variants."""
+
 from ..controllers.controller_cfg import PrepareStateCfg, RobotCfg
 
 

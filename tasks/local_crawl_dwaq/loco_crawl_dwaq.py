@@ -1,3 +1,5 @@
+"""Crawl DWAQ task implementation for T1 with two-input actor runtime."""
+
 from __future__ import annotations
 
 from dataclasses import MISSING
@@ -20,7 +22,17 @@ from booster_deploy.utils.isaaclab.configclass import configclass
 class LocoCrawlDwaqPolicy(Policy):
     """Crawl policy aligned with the training observation pipeline."""
 
-    def __init__(self, cfg: LocoCrawlDwaqPolicyCfg, controller: BaseController):
+    def __init__(self, cfg: LocoCrawlDwaqPolicyCfg, controller: BaseController) -> None:
+        """Initialize DWAQ crawl policy runtime and observation buffers.
+
+        Args:
+            cfg: Policy configuration for DWAQ crawl deployment.
+            controller: Controller instance providing robot state and timing.
+
+        Returns:
+            None.
+
+        """
         super().__init__(cfg, controller)
         self.cfg = cfg
         self.robot = controller.robot
@@ -113,6 +125,12 @@ class LocoCrawlDwaqPolicy(Policy):
         self._onnx_hist_input_name = hist_name
 
     def reset(self) -> None:
+        """Reset policy state at controller start.
+
+        Returns:
+            None.
+
+        """
         pass
 
     def _compute_phase(self, time_s: float) -> float:
@@ -135,6 +153,12 @@ class LocoCrawlDwaqPolicy(Policy):
         return torch.tensor([-1.0, 1.0], dtype=torch.float32), False  # Crawling gait
 
     def compute_observation(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """Compute current observation and flattened observation history.
+
+        Returns:
+            Tuple of single-step observation and flattened history tensor.
+
+        """
         dof_pos = self.robot.data.joint_pos
         dof_vel = self.robot.data.joint_vel
         world_base_quat = self.robot.data.root_quat_w
@@ -228,6 +252,12 @@ class LocoCrawlDwaqPolicy(Policy):
         return obs, self.obs_history.flatten()
 
     def inference(self) -> torch.Tensor:
+        """Run one policy inference step and map actions to joint targets.
+
+        Returns:
+            Joint target tensor in real-joint order.
+
+        """
         obs, obs_history = self.compute_observation()
         # Cache history before model call. Both torch and onnx branches rely on
         # the same value so behavior stays identical across backends.
@@ -325,6 +355,8 @@ class LocoCrawlDwaqPolicy(Policy):
 
 @configclass
 class LocoCrawlDwaqPolicyCfg(PolicyCfg):
+    """Configuration schema for DWAQ crawl policy."""
+
     constructor = LocoCrawlDwaqPolicy
     checkpoint_path: str = MISSING  # type: ignore
     policy_joint_names: list[str] = MISSING  # type: ignore
@@ -347,6 +379,8 @@ class LocoCrawlDwaqPolicyCfg(PolicyCfg):
 
 @configclass
 class T1CrawlDwaqControllerCfg(ControllerCfg):
+    """Controller configuration tuned for T1 crawl DWAQ execution."""
+
     policy_dt = 0.01
     robot = T1_23DOF_CRAWL_CFG.replace(  # type: ignore
         default_joint_pos=[
@@ -410,7 +444,13 @@ class T1CrawlDwaqControllerCfg(ControllerCfg):
         ],
     )
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Finalize controller and logging settings for crawl deployment.
+
+        Returns:
+            None.
+
+        """
         self.mujoco.decimation = 10
         super().__post_init__()
         self.policy.stat_log_path = "logs/loco_crawl_dwaq/inference_stats.csv"

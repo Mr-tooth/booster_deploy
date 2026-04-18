@@ -1,3 +1,5 @@
+"""Typed configuration objects used by controllers, robots, and policies."""
+
 from typing import Callable, List, Optional
 from dataclasses import MISSING
 import torch
@@ -7,6 +9,8 @@ from ..utils.isaaclab.configclass import configclass
 
 @configclass
 class PrepareStateCfg:
+    """Configure initial pose and gains used when entering custom mode."""
+
     stiffness: List[float] = MISSING
     damping: List[float] = MISSING
     joint_pos: List[float] = MISSING
@@ -14,6 +18,8 @@ class PrepareStateCfg:
 
 @configclass
 class MujocoControllerCfg:
+    """Configure MuJoCo simulation runtime settings."""
+
     init_pos: List[float] = [0.0, 0.0, 0.6]
     init_quat: List[float] = [1.0, 0.0, 0.0, 0.0]
     decimation: int = 10
@@ -26,12 +32,16 @@ class MujocoControllerCfg:
 
 @configclass
 class BoosterRobotControllerCfg:
+    """Configure real-robot control loop service parameters."""
+
     low_state_dt: float = 0.002
     metrics_max_events: int = 2000
 
 
 @configclass
 class RobotCfg:
+    """Describe robot topology, gains, limits, and model asset paths."""
+
     name: str = MISSING
 
     joint_names: list[str] = MISSING
@@ -50,7 +60,13 @@ class RobotCfg:
 
     prepare_state: PrepareStateCfg = MISSING
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Validate robot vector fields are aligned with joint count.
+
+        Returns:
+            None.
+
+        """
         assert (
             len(self.joint_names)
             == len(self.joint_stiffness)
@@ -62,6 +78,8 @@ class RobotCfg:
 
 @configclass
 class VelocityCommandCfg:
+    """Set max command magnitudes for velocity command normalization."""
+
     vx_max: float = 1.0
     vy_max: float = 1.0
     vyaw_max: float = 1.0
@@ -69,6 +87,8 @@ class VelocityCommandCfg:
 
 @configclass
 class PolicyCfg:
+    """Configure policy constructor, checkpoint and runtime backend options."""
+
     constructor: Callable = MISSING
     checkpoint_path: str = MISSING
     enable_safety_fallback: bool = True
@@ -80,6 +100,8 @@ class PolicyCfg:
 
 @configclass
 class EvaluatorCfg:
+    """Configure optional evaluator entry point and rendering behavior."""
+
     constructor: Callable = MISSING
     # Rendering
     render: bool = True
@@ -87,8 +109,7 @@ class EvaluatorCfg:
 
 @configclass
 class ControllerCfg:
-    """Controller configuration class.
-    """
+    """Top-level controller configuration bundle."""
 
     policy_dt: float = 0.02
     robot: RobotCfg = MISSING
@@ -99,5 +120,11 @@ class ControllerCfg:
     booster: BoosterRobotControllerCfg = BoosterRobotControllerCfg()
     evaluator: Optional[EvaluatorCfg] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Derive MuJoCo physics step from policy rate and decimation.
+
+        Returns:
+            None.
+
+        """
         self.mujoco.physics_dt = self.policy_dt / self.mujoco.decimation
