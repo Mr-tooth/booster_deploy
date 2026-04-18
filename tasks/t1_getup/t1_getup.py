@@ -148,6 +148,7 @@ def _build_t1_getup_robot_cfg() -> RobotCfg:
             damping=joint_damping,
             joint_pos=home_joint_pos,
         ),
+        default_joint_pos=home_joint_pos,
     )
 
 
@@ -189,9 +190,12 @@ class T1GetupPolicy(Policy):
             Actor observation tensor with shape `(75,)`.
 
         """
+
+        # Project gravity vector into base frame
         gravity_w = torch.tensor([0.0, 0.0, -1.0], dtype=torch.float32, device=self.robot.data.device)
         projected_gravity = lab_math.quat_apply_inverse(self.robot.data.root_quat_w, gravity_w)
 
+        # mapped joint positions and velocities in policy joint order
         mapped_default_pos = self.robot.default_joint_pos[self.real2sim_joint_map]
         mapped_dof_pos = self.robot.data.joint_pos[self.real2sim_joint_map]
         mapped_dof_vel = self.robot.data.joint_vel[self.real2sim_joint_map]
@@ -229,6 +233,7 @@ class T1GetupPolicy(Policy):
         self.last_action = action.clone()
         current_joint_pos = self.robot.data.joint_pos.clone()
 
+        # add safety guard to be in align with mjlab getup training config
         if int(getattr(self.controller, "_step_count", 0)) <= self.cfg.settle_steps:
             return current_joint_pos
 
@@ -250,7 +255,7 @@ class T1GetupPolicyCfg(PolicyCfg):
     checkpoint_path: str = MISSING  # type: ignore
     policy_joint_names: list[str] = MISSING  # type: ignore
     action_scale: float = 0.6
-    settle_steps: int = 50
+    settle_steps: int = 100
     clip_obs: float = 100.0
     clip_action: float = 100.0
     obs_ang_vel_scale: float = 1.0
@@ -267,3 +272,9 @@ class T1GetupControllerCfg(ControllerCfg):
     policy: T1GetupPolicyCfg = T1GetupPolicyCfg(
         policy_joint_names=list(T1_23DOF_CFG.joint_names),
     )
+
+    def __post_init__(self) -> None:
+        """Validate controller config and policy robot config are aligned."""
+        super().__post_init__()
+        self.mujoco.init_pos = (0, 0, 0.25)
+        self.mujoco.init_quat = lab_math.quat_from_euler_xyz(torch.tensor([0]), torch.tensor([1.57]), torch.tensor([0])).squeeze().tolist()
